@@ -1,53 +1,57 @@
-import React, { Fragment } from "react";
-import MeetupList from "../components/meetups/MeetupList.js";
-import { MongoClient } from "mongodb";
-import Head from 'next/head'
+// import { useRouter } from "next/router";
+import MeetupDetail from "../../components/meetups/MeetupDetail.js";
+import { MongoClient, ObjectId } from "mongodb";
+import Head from "next/head";
+import { Fragment } from "react";
 
-// const DUMMY_MEETUPS = [
-//   {
-//     id: "m1",
-//     title: "First image",
-//     image:
-//       "https://www.studying-in-germany.org/wp-content/uploads/2018/03/Munich.jpg",
-//     address: "Some address 5, 12345 Some city",
-//     description: "This is a first meetup",
-//   },
-//   {
-//     id: "m2",
-//     title: "Second image",
-//     image:
-//       "https://www.studying-in-germany.org/wp-content/uploads/2018/03/Munich.jpg",
-//     address: "Some address 5, 54321 Some city",
-//     description: "This is a second meetup",
-//   },
-// ];
-
-const HomePage = (props) => {
-  return <Fragment>
-    {/* for metadata */}
-    <Head>
-      <title>React Meetups</title>
-      <meta name = "description" content="Browse a huge list of highly active react meetups" />
-    </Head>
-  <MeetupList meetups={props.meetups} />
-  </Fragment>
+const MeetupDetails = (props) => {
+  return (
+    <Fragment>
+      <Head>
+        <title>{props.meetupData.title}</title>
+        <meta name="description" content={props.meetupData.description} />
+      </Head>
+      <MeetupDetail
+        image={props.meetupData.image}
+        title={props.meetupData.title}
+        address={props.meetupData.address}
+        description={props.meetupData.description}
+      />
+    </Fragment>
+  );
 };
 
-//For data, which changes frequently and if the request and response objects are necessary
-// export async function getServerSideProps(context) {
-//   const req = context.req;
-//   const res = context.res;
+export async function getStaticPaths() {
+  const client = await MongoClient.connect(
+    //password should be repolaced and Mydatabase should be replaced with whatever
+    "mongodb+srv://Anton:Narabota01@cluster0.ecnwz.mongodb.net/meetups?retryWrites=true&w=majority"
+  );
+  const db = client.db();
+  const meetupsCollection = db.collection("meetups");
 
-//   return {
-//     props: {
-//       meetups: DUMMY_MEETUPS,
-//     },
-//   };
-// }
+  //find all meetups but return only the _ids
+  const meetups = await meetupsCollection.find({}, { _id: 53 }).toArray();
 
-//needs to be with this name
-export async function getStaticProps() {
-  //fetch data from an API
+  client.close();
+
+  return {
+    //if all possible urls are described then fallback is false
+    //blocking is for deployment
+    fallback: 'blocking',
+    paths: meetups.map((el) => {
+      return {
+        params: {
+          meetupId: el._id.toString(),
+        },
+      };
+    }),
+  };
+}
+
+export async function getStaticProps(context) {
+  //useRouter cant be used here. It can only be used in function components
+  //context.params.meetupId will do the trick
+  const meetupId = context.params.meetupId;
 
   const client = await MongoClient.connect(
     //password should be repolaced and Mydatabase should be replaced with whatever
@@ -56,23 +60,23 @@ export async function getStaticProps() {
   const db = client.db();
   const meetupsCollection = db.collection("meetups");
 
-  const meetups = await meetupsCollection.find().toArray();
+  const selectedMeetup = await meetupsCollection.findOne({
+    _id: ObjectId(meetupId),
+  });
+
   client.close();
+
   return {
     props: {
-      meetups: meetups.map((el) => {
-        return {
-          title: el.data.title,
-          image: el.data.image,
-          address: el.data.address,
-          id: el._id.toString(),
-        };
-      }),
-      // meetups: DUMMY_MEETUPS
+      meetupData: {
+        id: selectedMeetup._id.toString(),
+        title: selectedMeetup.data.title,
+        address: selectedMeetup.data.address,
+        image: selectedMeetup.data.image,
+        description: selectedMeetup.data.description,
+      },
     },
-    //how many seconds will be regenerated after
-    revalidate: 1,
   };
 }
 
-export default HomePage;
+export default MeetupDetails;
